@@ -67,8 +67,8 @@ def get_create_issue(message):
         issue = jira.create_issue(project = 'KAN',
                                       summary= jira_summary,
                                       description = jira_description,
-                                      #priority={'name': jira_priority}
-                                      issuetype= {'name': 'Task'},)
+                                      issuetype= {'name': 'Task'},
+                                      priority={'name': jira_priority})
         bot.send_message(message.chat.id, 'Задача ' + issue.key + ' создана')
     elif message.text.strip() == 'Нет' :
         bot.send_message(message.chat.id, 'Создание задачи отменено.')
