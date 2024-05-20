@@ -45,25 +45,31 @@ def handle_text(message):
 def get_create_issue_summary(message):
     global jira_summary
     jira_summary = message.text.strip()
-    bot.send_message(message.chat.id, 'Создание задачи. Введите Статус.')
+    bot.send_message(message.chat.id, 'Введите Статус.')
     bot.register_next_step_handler(message, get_create_issue_status)
 
 def get_create_issue_status(message):
     global jira_status
     jira_status = message.text.strip()
-    bot.send_message(message.chat.id, 'Создание задачи. Введите приоритет.')
+    bot.send_message(message.chat.id, 'Введите приоритет.')
     bot.register_next_step_handler(message, get_create_issue_priority)
 def get_create_issue_priority(message):
     global jira_priority
     jira_priority = message.text.strip()
-    bot.send_message(message.chat.id, 'Создание задачи. Введите описание')
+    bot.send_message(message.chat.id, 'Введите id человека, которого хотите назначить.')
+    bot.register_next_step_handler(message, get_account_id)
+
+def get_account_id(message):
+    global jira_account_id
+    jira_account_id = message.text.strip()
+    bot.send_message(message.chat.id, 'Введите описание.')
     bot.register_next_step_handler(message, get_create_issue_description)
 
 def get_create_issue_description(message):
     global jira_description
     jira_description = message.text.strip()
     bot.send_message(message.chat.id, 'Название: ' + jira_summary + '\n' +
-                                      'Статус: ' + jira_priority + '\n' +
+                                      'Статус: ' + jira_status + '\n' +
                                       'Приоритет: ' + jira_priority + '\n' +
                                       'Описание: ' + jira_description)
     bot.send_message(message.chat.id, 'Создать задачу? (Да/Нет)')
@@ -74,8 +80,9 @@ def get_create_issue(message):
         issue = jira.create_issue(project = 'KAN',
                                       summary= jira_summary,
                                       description = jira_description,
-                                      issuetype= {'name': 'Task'},
-                                      priority = {'name': jira_priority})
+                                      issuetype = {'name': 'Task'},
+                                      priority = {'name': jira_priority},
+                                      assignee = {'id': f'{jira_account_id}'})
         bot.send_message(message.chat.id, 'Задача ' + issue.key + ' создана')
         if jira_status.upper() == 'TO DO':
             jira.transition_issue(issue.key, '11')
@@ -85,7 +92,6 @@ def get_create_issue(message):
             jira.transition_issue(issue.key, '31')
     elif message.text.strip() == 'Нет':
         bot.send_message(message.chat.id, 'Создание задачи отменено.')
-
 #Поиск задачи
 def get_search_issue(message):
     search_text = message.text.strip()
