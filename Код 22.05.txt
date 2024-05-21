@@ -1,0 +1,186 @@
+import telebot
+from jira import JIRA
+from telebot import types
+
+bot = telebot.TeleBot('6378161589:AAGYPNCfZncb4u5UBBvOdZDvdnLBb0t-YiE')
+
+
+jira_options = {'server': 'https://vlad2005sainov.atlassian.net'}
+jira = JIRA("https://vlad2005sainov.atlassian.net", basic_auth=("vlad2005sainov@gmail.com", "ATATT3xFfGF0mH7xC6A1LIQVYU5fwlCDR0ezrYv4OMH_rS2oQFPtzlCCqZh-Ves5TWEUwWnGNEHIwjHO8iWfGNgoRRDJlWB_QEQe4giWPCI5Rtz7Lw2FA82jCxh18cTNSMW6-uwoCOD6HCxp4Z9fbu0Cwz2h6qbayADiD2wmi4IIuiNXbJKf1AI=77C91376"))
+
+
+
+
+@bot.message_handler(commands=["start"])
+def bot_messages(message):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    item1 = types.KeyboardButton("Создать задачу")
+    markup.add(item1)
+    item2 = types.KeyboardButton("Найти задачу")
+    markup.add(item2)
+    item3 = types.KeyboardButton("Открыть задачу")
+    markup.add(item3)
+    item4 = types.KeyboardButton("Удалить задачу")
+    markup.add(item4)
+    item5 = types.KeyboardButton("Изменить статус")
+    markup.add(item5)
+
+    bot.send_message(message.chat.id, 'Я могу:\n Создать задачу\n Найти задачу\n Открыть задачу', reply_markup=markup)
+
+@bot.message_handler(content_types=["text"])
+def handle_text(message):
+    if message.text.strip() == 'Создать задачу':
+        bot.send_message(message.chat.id, 'Создание задачи. Введите название задачи.')
+        bot.register_next_step_handler(message, get_create_issue_summary)
+    elif message.text.strip() == 'Найти задачу':
+        bot.send_message(message.chat.id, 'Введите ключевое слово для поиска задач.')
+        bot.register_next_step_handler(message, get_search_issue)
+    elif message.text.strip() == 'Открыть задачу':
+        bot.send_message(message.chat.id, 'Открытые задачи. Введите номер задачи, например KAN-...')
+        bot.register_next_step_handler(message, get_open_issue)
+    elif message.text.strip() == 'Удалить задачу':
+        bot.send_message(message.chat.id, 'Удаление задачи. Введите номер задачи KAN-...')
+        bot.register_next_step_handler(message, delete_issue)
+    elif message.text.strip() == 'Изменить статус':
+        bot.send_message(message.chat.id, 'Зменение статуса. Введите номер задачи KAN-...')
+        bot.register_next_step_handler(message, change)
+
+
+#Добавление задачи
+def get_create_issue_summary(message):
+    global jira_summary
+    jira_summary = message.text.strip()
+    bot.send_message(message.chat.id, 'Введите Статус.')
+    bot.register_next_step_handler(message, get_create_issue_status)
+
+def get_create_issue_status(message):
+    global jira_status
+    jira_status = message.text.strip()
+    bot.send_message(message.chat.id, 'Введите приоритет.')
+    bot.register_next_step_handler(message, get_create_issue_priority)
+def get_create_issue_priority(message):
+    global jira_priority
+    jira_priority = message.text.strip()
+    bot.send_message(message.chat.id, 'Введите id человека, которого хотите назначить.')
+    bot.register_next_step_handler(message, get_account_id)
+
+def get_account_id(message):
+    global jira_account_id
+    jira_account_id = message.text.strip()
+    bot.send_message(message.chat.id, 'Введите описание.')
+    bot.register_next_step_handler(message, get_create_issue_description)
+
+
+def get_create_issue_description(message):
+    global jira_description
+    jira_description = message.text.strip()
+    bot.send_message(message.chat.id, 'Введите дедлайн задачи в формате ГГГГ-ММ-ДД')
+    bot.register_next_step_handler(message, setdate)
+
+
+def setdate(message):
+    global dateset
+    dateset = message.text.strip()
+    bot.send_message(message.chat.id, 'Название: ' + jira_summary + '\n' +
+                                      'Статус: ' + jira_status + '\n' +
+                                      'Приоритет: ' + jira_priority + '\n' +
+                                      'Описание: ' + jira_description)
+    bot.send_message(message.chat.id, 'Создать задачу? (Да/Нет)')
+    bot.register_next_step_handler(message, get_create_issue)
+
+
+def get_create_issue(message):
+    if message.text.strip().upper() == 'ДА' :
+        issue = jira.create_issue(project = 'KAN',
+                                      summary= jira_summary,
+                                      description = jira_description,
+                                      issuetype = {'name': 'Task'},
+                                      priority = {'name': jira_priority},
+                                      assignee = {'@': f'{jira_account_id}'})
+        jira.assign_issue(issue.key, f'{jira_account_id}')
+        bot.send_message(message.chat.id, 'Задача "' +  jira_summary  + '" создана')
+        if jira_status.upper() == 'TO DO':
+            jira.transition_issue(issue.key, '11')
+        elif jira_status.upper() == 'IN PROGRESS':
+            jira.transition_issue(issue.key, '21')
+        elif jira_status.upper() == 'DONE':
+            jira.transition_issue(issue.key, '31')
+    elif message.text.strip().upper() == 'НЕТ':
+        bot.send_message(message.chat.id, 'Создание задачи отменено.')
+
+
+
+#Поиск задачи
+def get_search_issue(message):
+    search_text = message.text.strip()
+    jql = f'text ~ "{search_text}"'
+    issues = jira.search_issues(jql, maxResults=False)
+    ans = []
+    for issue in issues:
+        ans.append(issue.summary)
+    bot.send_message(message.chat.id, 'Найдены задачи:' + '\n'.join(ans))
+
+
+#Окрытие задачи
+def get_open_issue(message):
+    issue_name = message.text.strip().lower()
+    try:
+        issues = jira.search_issues(f'summary ~ {issue_name}')
+        if issues:
+            response = 'Следующие задачи содержат указанное название:\n'
+            for issue in issues:
+                desc = issue.fields.description if issue.fields.description is not None else '-'
+                response += ('Ключ: ' + issue.key + '\n' +
+                'Название: ' + issue.fields.summary + '\n' +
+                'Приоритет: ' + issue.fields.priority.name + '\n' +
+                'Описание: {0}\n\n'.format(desc))
+            bot.send_message(message.chat.id, response)
+        else:
+            bot.send_message(message.chat.id, 'Задач с таким названием не найдено.')
+    except Exception as e:
+        bot.send_message(message.chat.id, 'Ошибка при поиске задач: ' + str(e))
+
+#Изменение статуса
+def change(message):
+    global issue_key
+    issue_key = message.text.strip().upper()
+    bot.send_message(message.chat.id, 'Введите статус, в который хотите перевести задачу.')
+    bot.register_next_step_handler(message, changer_status)
+
+def changer_status(message):
+    change_s = message.text.strip().upper()
+    if issue_key.startswith('KAN-'):
+        try:
+            issue = jira.issue(issue_key)
+            if change_s == "TO DO":
+                jira.transition_issue(issue.key, '11')
+                bot.send_message(message.chat.id, 'Статус изменен.')
+            elif change_s == "IN PROGRESS":
+                jira.transition_issue(issue.key, '21')
+                bot.send_message(message.chat.id, 'Статус изменен.')
+            elif change_s == "DONE":
+                jira.transition_issue(issue.key, '31')
+                bot.send_message(message.chat.id, 'Статус изменен.')
+        except Exception as e:
+            bot.send_message(message.chat.id, 'Ошибка при изменении статуса: ' + str(e))
+    else:
+        bot.send_message(message.chat.id, 'Некорректный формат ключа задачи. Введите ключ в формате KAN-123.')
+
+
+
+#Удаление задачи
+def delete_issue(message):
+    issue_key = message.text.strip().upper()
+    if issue_key.startswith('KAN-'):
+        try:
+            issue = jira.issue(issue_key)
+            issue.delete()
+            bot.send_message(message.chat.id, 'Задача ' + issue_key + ' удалена.')
+        except Exception as e:
+            bot.send_message(message.chat.id, 'Ошибка при удалении задачи: ' + str(e))
+    else:
+        bot.send_message(message.chat.id, 'Некорректный формат ключа задачи. Введите ключ в формате KAN-123.')
+
+
+if __name__ == '__main__':
+    bot.infinity_polling()
